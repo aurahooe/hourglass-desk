@@ -1,2 +1,3 @@
-# hourglass-desk
-A living public desk. Features rotate every hour.
+# Hourglass Desk
+
+A small public bulletin. Sign in, keep drafts, mark pieces public, and let the hour choose one to feature.

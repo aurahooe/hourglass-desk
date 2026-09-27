@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,47 +6,45 @@ import { supabase } from "../../lib/supabase";
 
 export default function Login() {
   const router = useRouter();
+  const [mode, setMode] = useState("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState("signin");
   const [msg, setMsg] = useState("");
 
   async function submit(e) {
     e.preventDefault();
     setMsg("");
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return setMsg(error.message);
-      setMsg("Account created. If email confirmation is on, check your inbox. Then sign in.");
-      return;
+    const fn = mode === "in" ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+    const { data, error } = await fn({ email, password });
+    if (error) { setMsg(error.message); return; }
+    if (data.user) {
+      await supabase.from("profiles").upsert({
+        id: data.user.id,
+        handle: email.split("@")[0].slice(0, 24),
+        display_name: email.split("@")[0]
+      });
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return setMsg(error.message);
     router.push("/studio");
   }
 
   return (
     <div className="wrap">
       <nav className="nav">
-        <Link href="/" className="mark"><b>Hourglass</b> Desk</Link>
+        <Link className="mark" href="/">Hourglass <span>Desk</span></Link>
       </nav>
-      <header className="hero" style={{ gridTemplateColumns: "1fr" }}>
-        <div>
-          <div className="kicker">Door</div>
-          <h1>{mode === "signin" ? "Come back in." : "Take a desk."}</h1>
-        </div>
-      </header>
-      <div className="grid">
-        <form className="card span-7 form" onSubmit={submit}>
+      <div className="card span-12" style={{ maxWidth: 420 }}>
+        <div className="kicker">{mode === "in" ? "Return" : "Open a drawer"}</div>
+        <h1 style={{ fontSize: 36 }}>{mode === "in" ? "Sign in" : "Create a desk"}</h1>
+        <form className="form" onSubmit={submit}>
           <input type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input type="password" required minLength={6} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input type="password" required minLength={8} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="row">
-            <button className="btn" type="submit">{mode === "signin" ? "Sign in" : "Create account"}</button>
-            <button type="button" className="btn ghost" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
-              {mode === "signin" ? "Need a desk?" : "I already have one"}
+            <button className="btn" type="submit">{mode === "in" ? "Enter" : "Create"}</button>
+            <button className="btn ghost" type="button" onClick={() => setMode(mode === "in" ? "up" : "in")}>
+              {mode === "in" ? "Need a desk?" : "Already have one?"}
             </button>
           </div>
-          {msg && <p>{msg}</p>}
+          {msg && <p className="empty">{msg}</p>}
         </form>
       </div>
     </div>

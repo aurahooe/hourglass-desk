@@ -1,38 +1,23 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-
-function hourKey(d = new Date()) {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const h = String(d.getUTCHours()).padStart(2, "0");
-  return `${y}-${m}-${day}T${h}`;
-}
+import { nextHour, slotStart } from "../lib/time";
 
 export default function Home() {
   const [user, setUser] = useState(null);
-  const [feature, setFeature] = useState(null);
-  const [posts, setPosts] = useState([]);
+  const [hour, setHour] = useState(null);
+  const [notes, setNotes] = useState([]);
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user || null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user || null);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user || null));
     return () => sub.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const next = new Date(now);
-      next.setMinutes(60, 0, 0);
-      setSeconds(Math.max(0, Math.floor((next - now) / 1000)));
-    };
+    const tick = () => setSeconds(Math.max(0, Math.floor((nextHour() - Date.now()) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -40,31 +25,16 @@ export default function Home() {
 
   useEffect(() => {
     async function load() {
-      const key = hourKey();
-      const { data: feat } = await supabase
-        .from("hourly_features")
-        .select("id, note, hour_key, post_id")
-        .eq("hour_key", key)
-        .maybeSingle();
-
-      if (feat?.post_id) {
-        const { data: post } = await supabase
-          .from("posts")
-          .select("id, title, body, created_at, user_id, is_public")
-          .eq("id", feat.post_id)
-          .maybeSingle();
-        setFeature({ ...feat, post });
-      } else {
-        setFeature(feat);
+      const slot = slotStart();
+      const { data: h } = await supabase.from("hours").select("headline, editorial, featured_note_id, slot").eq("slot", slot).maybeSingle();
+      let featured = null;
+      if (h?.featured_note_id) {
+        const { data: n } = await supabase.from("notes").select("id, title, body, created_at").eq("id", h.featured_note_id).maybeSingle();
+        featured = n;
       }
-
-      const { data: list } = await supabase
-        .from("posts")
-        .select("id, title, body, created_at, user_id")
-        .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(18);
-      setPosts(list || []);
+      setHour({ ...h, featured });
+      const { data: list } = await supabase.from("notes").select("id, title, body, created_at").eq("is_public", true).order("created_at", { ascending: false }).limit(16);
+      setNotes(list || []);
     }
     load();
   }, []);
@@ -78,44 +48,50 @@ export default function Home() {
   return (
     <div className="wrap">
       <nav className="nav">
-        <div className="mark"><b>Hourglass</b> Desk</div>
+        <div className="mark">Hourglass <span>Desk</span></div>
         <div className="links">
           <Link href="/">Board</Link>
           <Link href="/studio">Studio</Link>
-          {user ? (
-            <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-          ) : (
-            <Link href="/login">Sign in</Link>
-          )}
+          {user ? <button onClick={() => supabase.auth.signOut()}>Sign out</button> : <Link href="/login">Sign in</Link>}
         </div>
       </nav>
       <header className="hero">
         <div>
           <div className="kicker">Living bulletin</div>
-          <h1>What the hour chose to keep.</h1>
-          <p className="lede">Write privately, publish when it feels finished. Anything marked public lands on the board. Every hour, one piece is pulled into the lamp.</p>
+          <h1>What the hour decided to keep.</h1>
+          <p className="lede">Write in private. Flip a slip public when it is ready. The board only shows what people chose to share. Every hour the lamp turns and one piece is pulled forward.</p>
         </div>
         <div className="clock">
           <small>Until the next turn</small>
           <strong>{clock}</strong>
-          <div style={{ opacity: 0.75, fontSize: 14 }}>{feature?.note || "Waiting for this hour’s dispatch."}</div>
+          <div style={{ color: "#6e6458", fontSize: 14 }}>{hour?.headline || "Waiting on this hour’s dispatch."}</div>
         </div>
       </header>
       <section className="grid">
         <article className="card span-7">
           <div className="meta">This hour</div>
-          {feature?.post ? (<><h2>{feature.post.title}</h2><p>{feature.post.body}</p></>) : (<p className="empty">No public slip has been chosen yet. Publish something and it can surface on the next turn.</p>)}
+          {hour?.featured ? (
+            <>
+              <h2>{hour.featured.title}</h2>
+              <p>{hour.featured.body}</p>
+            </>
+          ) : (
+            <>
+              <h2>{hour?.headline || "The lamp is empty."}</h2>
+              <p>{hour?.editorial || "Publish a public slip and it can surface on the next turn."}</p>
+            </>
+          )}
         </article>
         <aside className="card span-5">
-          <div className="meta">How it works</div>
+          <div className="meta">House rules</div>
           <h3>A desk, not a feed.</h3>
-          <p>Sign in, keep drafts in the studio, tick public when you want the room to see it. The hourly turn is automatic. Nothing here is meant to shout.</p>
+          <p>Sign in. Keep drafts in the studio. Mark public only when you want the room to see it. Private notes stay private. That is the whole contract.</p>
         </aside>
-        {posts.map((p, i) => (
-          <article key={p.id} className={`card ${i % 5 === 0 ? "span-8" : "span-4"}`} style={{ animation: `rise 700ms ${80 + i * 40}ms ease both` }}>
-            <div className="meta">{new Date(p.created_at).toLocaleString()}</div>
-            <h3>{p.title}</h3>
-            <p>{p.body}</p>
+        {notes.map((n, i) => (
+          <article key={n.id} className={`card ${i % 5 === 0 ? "span-8" : "span-4"}`} style={{ animation: `rise 700ms ${60 + i * 35}ms ease both` }}>
+            <div className="meta">{new Date(n.created_at).toLocaleString()}</div>
+            <h3>{n.title}</h3>
+            <p>{n.body}</p>
           </article>
         ))}
       </section>

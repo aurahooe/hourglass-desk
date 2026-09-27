@@ -2,7 +2,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "Hourglass Desk",
-  description: "A quiet public desk. Features turn over with the hour.",
+  description: "A quiet board. One signal an hour."
 };
 
 export default function RootLayout({ children }) {
@@ -10,10 +10,8 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,560;8..60,700&display=swap"
-          rel="stylesheet"
-        />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
       </head>
       <body>{children}</body>
     </html>
